@@ -1,0 +1,7 @@
+config.json
+package-lock.json
+src
+bgs
+pdfs
+svgs
+node_modules

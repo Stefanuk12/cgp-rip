@@ -1,0 +1,36 @@
+{
+  "name": "cgp-rip",
+  "version": "1.0.0",
+  "description": "Convert an online CGP book to .pdf",
+  "main": "./lib/cli.js",
+  "types": "./lib/cli.d.ts",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Stefanuk12",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.0.1",
+    "commander": "^9.4.1",
+    "got": "^12.5.1",
+    "image-size": "^1.0.2",
+    "jspdf": "^2.5.1",
+    "tough-cookie": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.8.0",
+    "@types/tough-cookie": "^4.0.2"
+  },
+  "bin": {
+    "cgp-rip": "./lib/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Stefanuk12/cgp-rip.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Stefanuk12/cgp-rip/issues"
+  },
+  "homepage": "https://github.com/Stefanuk12/cgp-rip#readme"
+}

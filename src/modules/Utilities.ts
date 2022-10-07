@@ -1,14 +1,13 @@
 // Dependencies
 import chalk from "chalk"
-import * as fs from "fs"
-import sizeOf from "image-size"
+//import * as fs from "fs"
 import { jsPDF as PDFDocument } from "jspdf"
 
 //
-export function CreateFolder(Name: string) {
-    if (!fs.existsSync(Name))
-        fs.mkdirSync(Name)
-}
+// export function CreateFolder(Name: string) {
+//     if (!fs.existsSync(Name))
+//         fs.mkdirSync(Name)
+// }
 
 //
 export type LogType = "Success" | "Error" | "Warn" | "Neutral" | "Info"
@@ -34,6 +33,17 @@ export function VerboseLog(Verbose: boolean, Type: LogType, ...args: any) {
     console.log(ColouredTime + " " + ChalkColour(...args))
 }
 
+// Gets an image size (via browser api)
+function SizeOf(Data: Buffer, mime: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        let image = new Image()
+        image.onload = function() {
+            resolve(image)
+        }
+        image.src = `data:${mime};base64,${Data.toString("base64")}`
+    })  
+}
+
 // Turns many pages into a pdf (ideally should all be the same size)
 export interface IImage {
     data: Buffer
@@ -51,7 +61,7 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
         //const LoadedImage = image.type == "jpg" ? await PDFDoc.embedJpg(image.data) : await PDFDoc.embedPng(image.data)
 
         // Create a new page
-        const ImageSize = sizeOf(image.data)
+        const ImageSize = await SizeOf(image.data, image.type == "PNG" ? "image/png" : "image/jpeg")
         const width = ImageSize.width || 1920
         const height = ImageSize.height || 1080
         const Page = PDFDoc.addPage([width, height])

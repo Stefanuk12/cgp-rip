@@ -1,13 +1,14 @@
 // Dependencies
-import got from "got"
-import { CreateFolder, VerboseLog } from "./Utilities.js"
-import * as fs from "fs"
+import { /*CreateFolder, */VerboseLog } from "./Utilities"
+//import * as fs from "fs"
 import { CookieJar } from "tough-cookie"
+import axios from "axios"
+import { wrapper } from "axios-cookiejar-support"
 
 //
-const prefixUrl = "https://library.cgpbooks.co.uk/digitalcontent" 
-export const HttpClientAgent = got.extend({
-    prefixUrl,
+const baseURL = "https://library.cgpbooks.co.uk/digitalcontent" 
+export const HttpClientAgent = axios.create({
+    baseURL,
     headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 OPR/91.0.4516.36"
     }
@@ -33,7 +34,7 @@ export class Book {
     // Generates the cloudfront stuff
     static async GenerateCloudFront(BookId: string, SessionId: string) {
         // Send the request
-        const Response = await got.post(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
+        const Response = await axios.post(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
             headers: {
                 cookie: `ASP.Net_SessionId=${SessionId}`
             },
@@ -71,7 +72,7 @@ export class Book {
     }
 
     // Gets the cookie jar
-    static getJar(CloudFront: ICloudFront, currentUrl: string = prefixUrl) {
+    static getJar(CloudFront: ICloudFront, currentUrl: string = baseURL) {
         // Create the jar and add each
         const jar = new CookieJar()
         jar.setCookieSync(`CloudFront-Signature=${CloudFront["CloudFront-Signature"]}`, currentUrl)
@@ -79,7 +80,13 @@ export class Book {
         jar.setCookieSync(`CloudFront-Key-Pair-Id=${CloudFront["CloudFront-Key-Pair-Id"]}`, currentUrl)
 
         //
-        return jar
+        return wrapper(axios.create({
+            baseURL,
+            jar,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 OPR/91.0.4516.36"
+            }
+        }))
     }
     getJar(currentUrl?: string) {
         return Book.getJar(this.CloudFront, currentUrl)
@@ -87,9 +94,9 @@ export class Book {
 
     // Gets some book details
     static async GetDetails(BookId: string, CloudFront: ICloudFront) {
-        return await HttpClientAgent(`${BookId}/assets/pager.js`, {
-            cookieJar: Book.getJar(CloudFront)
-        }).json()
+        return await Book.getJar(CloudFront)(`${BookId}/assets/pager.js`, {
+            responseType: "json"
+        })
     }
     async GetDetails() {
         return await Book.GetDetails(this.BookId, this.CloudFront)
@@ -113,20 +120,20 @@ export class Book {
         // Grab it
         const For = `SVG for ${this.BookId}:${Page}`
         VerboseLog(Verbose, "Info", `Attempting to get ${For}`)
-        const SVG = await HttpClientAgent(URL, {
-            cookieJar: this.getJar()
-        }).buffer()
+        const SVG = (await this.getJar()(URL, {
+            responseType: "arraybuffer"
+        })).data as ArrayBuffer
         VerboseLog(Verbose, "Success", `Got ${For}`)
 
         // Output
         if (OutputDirectory) {
             // Create the folder
-            CreateFolder(`${OutputDirectory}/svgs`)
-            const OutputFolder = `${OutputDirectory}/svgs/${this.BookId}`
-            CreateFolder(OutputFolder)
+            // CreateFolder(`${OutputDirectory}/svgs`)
+            // const OutputFolder = `${OutputDirectory}/svgs/${this.BookId}`
+            // CreateFolder(OutputFolder)
 
             // Output
-            fs.writeFileSync(`${OutputFolder}/page-${ZeroPadded}.svg`, SVG)
+            //fs.writeFileSync(`${OutputFolder}/page-${ZeroPadded}.svg`, SVG)
         }
 
         // Return
@@ -144,21 +151,29 @@ export class Book {
         const For = `background for ${this.BookId}:${Page}`
         let BackgroundFType: "PNG" | "JPEG" = "JPEG"
         VerboseLog(Verbose, "Info", `Attempting to get ${For}`)
-        const Background = await HttpClientAgent(URL + "jpg", {cookieJar}).buffer().catch(async e => {
+        const Background = await cookieJar(URL + "jpg", {
+            responseType: "arraybuffer"
+        })
+        .then(response => {
+            return response.data as ArrayBuffer
+        })
+        .catch(async e => {
             BackgroundFType = "PNG"
-            return await HttpClientAgent(URL + "png", {cookieJar}).buffer()
+            return (await cookieJar(URL + "png", {
+                responseType: "arraybuffer"
+            })).data as ArrayBuffer
         })
         VerboseLog(Verbose, "Success", `Got ${For}`)
 
         // Output
         if (OutputDirectory) {
             // Create the folder
-            CreateFolder(`${OutputDirectory}/bgs`)
-            const OutputFolder = `${OutputDirectory}/bgs/${this.BookId}`
-            CreateFolder(OutputFolder)
+            // CreateFolder(`${OutputDirectory}/bgs`)
+            // const OutputFolder = `${OutputDirectory}/bgs/${this.BookId}`
+            // CreateFolder(OutputFolder)
 
             // Output
-            fs.writeFileSync(`${OutputFolder}/page-${ZeroPadded}.${BackgroundFType}`, Background)
+            //fs.writeFileSync(`${OutputFolder}/page-${ZeroPadded}.${BackgroundFType}`, Background)
         }
 
         // Return

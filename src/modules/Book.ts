@@ -1,18 +1,24 @@
 // Dependencies
 import { /*CreateFolder, */VerboseLog } from "./Utilities"
 //import * as fs from "fs"
-import { CookieJar } from "tough-cookie"
-import axios from "axios"
-import { wrapper } from "axios-cookiejar-support"
 
 //
 const baseURL = "https://library.cgpbooks.co.uk/digitalcontent" 
-export const HttpClientAgent = axios.create({
-    baseURL,
-    headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 OPR/91.0.4516.36"
+
+//
+function CreateFormData(Data: Object) {
+    const data = new URLSearchParams()
+    for (const [i, v] of Object.entries(Data)) {
+        data.append(i, v)
     }
-})
+    return data
+}
+
+//
+async function DoRequest(input: RequestInfo | URL, init?: RequestInit, response: "json" | "arraybuffer" = "json", cookie: string = "") {
+    const Response = await fetch(input, init)
+    return response == "json" ? await Response.json() : await Response.arrayBuffer()
+}
 
 //
 export interface ICloudFront {
@@ -34,18 +40,30 @@ export class Book {
     // Generates the cloudfront stuff
     static async GenerateCloudFront(BookId: string, SessionId: string) {
         // Send the request
-        const Response = await axios.post(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
+        document.cookie = `ASP.Net_SessionId=${SessionId}`
+        const Response = await fetch(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
+            method: "POST",
             headers: {
-                cookie: `ASP.Net_SessionId=${SessionId}`
+                Cookie: document.cookie,
+                Origin: `https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`
             },
-            form: {
+            body: CreateFormData({
                 UserGuid: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa",
                 Signature: Math.random().toString(36).slice(2, 42) // does not matter what this is
-            }
+            }),
+            mode: "same-origin",
+            credentials: "include"
         })
 
+        //
+        if (Response.status != 200) {
+            const Message = "Unable to get cloudfront"
+            alert(Message)
+            throw(Message)
+        }
+
         // Parse the cookies
-        const SetCookies = Response.headers["set-cookie"]
+        const SetCookies = Response.headers.get("set-cookie").split(";")
         if (!SetCookies)
             throw(new Error("Did not get set-cookie"))
         const SetCookiesTrimmed = SetCookies.map(v => {
@@ -71,32 +89,22 @@ export class Book {
         return await Book.GenerateCloudFront(this.BookId, SessionId)
     }
 
-    // Gets the cookie jar
-    static getJar(CloudFront: ICloudFront, currentUrl: string = baseURL) {
-        // Create the jar and add each
-        const jar = new CookieJar()
-        jar.setCookieSync(`CloudFront-Signature=${CloudFront["CloudFront-Signature"]}`, currentUrl)
-        jar.setCookieSync(`CloudFront-Policy=${CloudFront["CloudFront-Policy"]}`, currentUrl)
-        jar.setCookieSync(`CloudFront-Key-Pair-Id=${CloudFront["CloudFront-Key-Pair-Id"]}`, currentUrl)
-
-        //
-        return wrapper(axios.create({
-            baseURL,
-            jar,
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 OPR/91.0.4516.36"
-            }
-        }))
+    // Gets the cookies as a string
+    static getCookieString(CloudFront: ICloudFront) {
+        return `CloudFront-Signature=${CloudFront["CloudFront-Signature"]};CloudFront-Policy=${CloudFront["CloudFront-Policy"]};CloudFront-Key-Pair-Id=${CloudFront["CloudFront-Key-Pair-Id"]}`
     }
-    getJar(currentUrl?: string) {
-        return Book.getJar(this.CloudFront, currentUrl)
+    getCookieString(currentUrl?: string) {
+        return Book.getCookieString(this.CloudFront)
     }
 
     // Gets some book details
     static async GetDetails(BookId: string, CloudFront: ICloudFront) {
-        return await Book.getJar(CloudFront)(`${BookId}/assets/pager.js`, {
-            responseType: "json"
-        })
+        return <Object>(await fetch(`${baseURL}/${BookId}/assets/pager.js`, {
+            headers: {
+                cookie: Book.getCookieString(CloudFront)
+            },
+            mode: "no-cors"
+        })).json()
     }
     async GetDetails() {
         return await Book.GetDetails(this.BookId, this.CloudFront)
@@ -120,9 +128,12 @@ export class Book {
         // Grab it
         const For = `SVG for ${this.BookId}:${Page}`
         VerboseLog(Verbose, "Info", `Attempting to get ${For}`)
-        const SVG = (await this.getJar()(URL, {
-            responseType: "arraybuffer"
-        })).data as ArrayBuffer
+        const SVG = await DoRequest(URL, {
+            headers: {
+                cookie: this.getCookieString()
+            },
+            mode: "no-cors"
+        })
         VerboseLog(Verbose, "Success", `Got ${For}`)
 
         // Output
@@ -145,23 +156,29 @@ export class Book {
         // Vars
         const ZeroPadded = Page.toString().padStart(4, "0")
         const URL = `${this.BookId}/assets/common/page-html5-substrates/page${ZeroPadded}_4.` // the _4 indicates a higher resolution. i believe this is the maximum or 5
-        const cookieJar = this.getJar()
+        const cookieString = this.getCookieString()
 
         // Grab it
         const For = `background for ${this.BookId}:${Page}`
         let BackgroundFType: "PNG" | "JPEG" = "JPEG"
         VerboseLog(Verbose, "Info", `Attempting to get ${For}`)
-        const Background = await cookieJar(URL + "jpg", {
-            responseType: "arraybuffer"
-        })
+        const Background = await DoRequest(URL + "jpg", {
+            headers: {
+                cookie: cookieString
+            },
+            mode: "no-cors"
+        }, "arraybuffer")
         .then(response => {
             return response.data as ArrayBuffer
         })
         .catch(async e => {
             BackgroundFType = "PNG"
-            return (await cookieJar(URL + "png", {
-                responseType: "arraybuffer"
-            })).data as ArrayBuffer
+            return await DoRequest(URL + "png", {
+                headers: {
+                    cookie: cookieString
+                },
+                mode: "no-cors"
+            }) as ArrayBuffer
         })
         VerboseLog(Verbose, "Success", `Got ${For}`)
 

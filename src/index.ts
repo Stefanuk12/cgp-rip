@@ -15,9 +15,10 @@ function toBuffer(ab: ArrayBuffer) {
 }
 
 // Starts the rip
-async function DoRip(formData: FormData) {
+export async function DoRip(formElement: HTMLFormElement) {
     // Vars
     console.log("Called")
+    const formData = new FormData(formElement)
     const BookId = formData.get("bookId")?.toString()
     const SessionId = formData.get("sessionId")?.toString()
     const Pages = formData.get("pages")?.toString()
@@ -29,6 +30,7 @@ async function DoRip(formData: FormData) {
 
     // Grab our cloudfront stuff
     const { CloudFrontCookies } = await Book.GenerateCloudFront(BookId, SessionId)
+    console.log(CloudFrontCookies)
 
     // Create the object
     const book = new Book({
@@ -84,5 +86,12 @@ async function DoRip(formData: FormData) {
     console.log(chalk.bgGreen("Done"))
 
     //
+    return false
+}
+
+// Event listener
+document.forms[0].onsubmit = function(e) {
+    e.preventDefault()
+    DoRip(document.forms[0])
     return false
 }

@@ -3,12 +3,12 @@
     <!-- Head -->
     <head>
         <!-- Load scripts -->
-        <script src="main.js"></script>
+        <script defer src="main.js"></script>
     </head>
 
     <!-- Body -->
     <body>
-        <form name="mainForm" onsubmit="return StartRip(this)">
+        <form id="mainForm" name="mainForm" onsubmit="console.log('Form'); return false">
             <label for="bookId">Book Id:</label><br>
             <input type="text" id="bookId" name="bookId"><br>
             <label for="sessionId">Session Id:</label><br>

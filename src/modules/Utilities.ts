@@ -120,7 +120,7 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
             const SpreadData = <[number, number, number, number]>Object.values(Data)
 
             // Add
-            Page.addSvgAsImage(svg, ...SpreadData)
+            Page.addSvgAsImage(SVGString, ...SpreadData)
             //await Page.svg(SVGImage, Data)
         }
             

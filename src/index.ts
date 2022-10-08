@@ -1,6 +1,6 @@
 // Dependencies
 import chalk from "chalk";
-import { VerboseLog, IImage, ManyImageToPDF, AddOutlinesToPDF } from "./modules/Utilities"
+import { VerboseLog, IImage, ManyImageToPDF, AddOutlinesToPDF, DownloadItem } from "./modules/Utilities"
 
 //
 async function GenerateCloudFront(BookId: string, SessionId: string) {
@@ -90,10 +90,7 @@ export async function DoRip(formElement: HTMLFormElement) {
 
         // Save
         let blob = PDF.output("blob")
-        let link = document.createElement("a")
-        link.href = window.URL.createObjectURL(blob)
-        link.download = `${BookId}.pdf`
-        link.click()
+        await DownloadItem(`${BookId}.pdf`, blob)
     }
 
     //

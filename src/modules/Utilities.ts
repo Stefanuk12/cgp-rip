@@ -49,13 +49,13 @@ function ArrayToB64(bytes: Uint8Array) {
 }
 
 // Gets an image size (via browser api)
-function SizeOf(Data: Uint8Array, mime: string) {
+function SizeOf(Data: Uint8Array | string, mime: string) {
     return new Promise<HTMLImageElement>((resolve, reject) => {
         let image = new Image()
         image.onload = function() {
             resolve(image)
         }
-        const b64 = ArrayToB64(Data)
+        const b64 = Data instanceof Uint8Array ? ArrayToB64(Data) : Data
         image.src = `data:${mime};base64,${b64}`
     })  
 }
@@ -67,6 +67,20 @@ function XMLToElement(XML: string) {
     return <SVGElement>Placeholder.firstElementChild
 }
 
+//
+export async function DownloadItem(Name: string, Data: Blob | MediaSource) {
+    let link = document.createElement("a")
+    link.href = window.URL.createObjectURL(Data)
+    link.download = Name
+    link.click()
+}
+
+// Sets an image's dimensions
+function SetImageDimensions(Image: HTMLImageElement, w?: number, h?: number) {
+    Image.width = w || Image.width
+    Image.height = h || Image.height
+}
+
 // Turns many pages into a pdf (ideally should all be the same size)
 export interface IImage {
     data: Uint8Array
@@ -75,6 +89,7 @@ export interface IImage {
 export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
     // Create the PDF
     const PDFDoc = new PDFDocument()
+    PDFDoc.deletePage(1)
 
     // Add each page
     for (let i in Images) {
@@ -93,13 +108,20 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
         Page.addImage(image.data, image.type, 0, 0, width, height)
         if (svg) {
             // Create the element
-            const SVGElement = XMLToElement(svg)
+            const SVGImage = await SizeOf(window.btoa(unescape(encodeURIComponent(svg))), "image/svg+xml")
+
+            // Mods
+            SetImageDimensions(SVGImage, width, height)
+            const SVGString = new XMLSerializer().serializeToString(SVGImage)
+            //await DownloadItem("test.svg", new Blob([SVGString], {type: "image/svg+xml"})) // Downloads like normal
+
+            // Data
             const Data = {x, y, width, height}
             const SpreadData = <[number, number, number, number]>Object.values(Data)
 
             // Add
-            //Page.addSvgAsImage(svg, ...SpreadData)
-            await Page.svg(SVGElement, Data)
+            Page.addSvgAsImage(svg, ...SpreadData)
+            //await Page.svg(SVGImage, Data)
         }
             
     }

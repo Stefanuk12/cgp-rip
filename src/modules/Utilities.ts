@@ -94,15 +94,12 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
         if (svg) {
             // Create the element
             const SVGElement = XMLToElement(svg)
+            const Data = {x, y, width, height}
+            const SpreadData = <[number, number, number, number]>Object.values(Data)
 
             // Add
-            Page.addSvgAsImage(svg, x, y, width, height)
-            // Page.svg(SVGElement, {
-            //     x,
-            //     y,
-            //     width,
-            //     height
-            // })
+            //Page.addSvgAsImage(svg, ...SpreadData)
+            await Page.svg(SVGElement, Data)
         }
             
     }

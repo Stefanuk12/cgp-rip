@@ -60,6 +60,13 @@ function SizeOf(Data: Uint8Array, mime: string) {
     })  
 }
 
+// SVG XML -> Element
+function XMLToElement(XML: string) {
+    const Placeholder = document.createElement("div")
+    Placeholder.innerHTML = XML
+    return <SVGElement>Placeholder.firstElementChild
+}
+
 // Turns many pages into a pdf (ideally should all be the same size)
 export interface IImage {
     data: Uint8Array
@@ -77,14 +84,27 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
 
         // Create a new page
         const ImageSize = await SizeOf(image.data, image.type == "PNG" ? "image/png" : "image/jpeg")
+        const [x, y] = [0, 0]
         const width = ImageSize.width || 1920
         const height = ImageSize.height || 1080
         const Page = PDFDoc.addPage([width, height])
 
         // Draw the image in the centre of the page, alongwidth svg - if specified
         Page.addImage(image.data, image.type, 0, 0, width, height)
-        if (svg)
-            Page.addSvgAsImage(svg, 0, 0, width, height)
+        if (svg) {
+            // Create the element
+            const SVGElement = XMLToElement(svg)
+
+            // Add
+            Page.addSvgAsImage(svg, x, y, width, height)
+            // Page.svg(SVGElement, {
+            //     x,
+            //     y,
+            //     width,
+            //     height
+            // })
+        }
+            
     }
 
     // Return the PDF

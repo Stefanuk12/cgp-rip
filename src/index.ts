@@ -1,46 +1,60 @@
 // Dependencies
 import chalk from "chalk";
-import { Book } from "./modules/Book";
-import type { IImage } from "./modules/Utilities";
-import { AddOutlinesToPDF, ManyImageToPDF, VerboseLog } from "./modules/Utilities";
+import { VerboseLog, IImage, ManyImageToPDF, AddOutlinesToPDF } from "./modules/Utilities"
 
 //
-function toBuffer(ab: ArrayBuffer) {
-    const buf = Buffer.alloc(ab.byteLength)
-    const view = new Uint8Array(ab)
-    for (let i = 0; i < buf.length; i++) {
-        buf[i] = view[i]
-    }
-    return buf
+async function GenerateCloudFront(BookId: string, SessionId: string) {
+    return await (await fetch(`http://localhost:3000/login/${SessionId}/${BookId}`, {
+        method: "POST"
+    })).json()
+}
+async function GetDetails(BookId: string, CookieString: string) {
+    return await (await fetch(`http://localhost:3000/details/${BookId}`, {
+        headers: {
+            "cloudfront-cookie": CookieString
+        }
+    })).json()
+}
+async function GetPageCount(BookId: string, CookieString: string) {
+    const TextPageCount = await (await fetch(`http://localhost:3000/page/${BookId}`, {
+        headers: {
+            "cloudfront-cookie": CookieString
+        }
+    })).text()
+    return parseInt(TextPageCount)
+}
+async function GetSVG(BookId: string, Page: number, CookieString: string) {
+    return await (await fetch(`http://localhost:3000/svg/${BookId}/${Page}`, {
+        headers: {
+            "cloudfront-cookie": CookieString
+        }
+    })).text()
+}
+async function GetBackground(BookId: string, Page: number, CookieString: string) {
+    return await (await fetch(`http://localhost:3000/background/${BookId}/${Page}`, {
+        headers: {
+            "cloudfront-cookie": CookieString
+        }
+    })).json()
 }
 
 // Starts the rip
 export async function DoRip(formElement: HTMLFormElement) {
     // Vars
-    console.log("Called")
     const formData = new FormData(formElement)
     const BookId = formData.get("bookId")?.toString()
     const SessionId = formData.get("sessionId")?.toString()
     const Pages = formData.get("pages")?.toString()
     if (!BookId || !SessionId) {
         alert("Missing data!")
-        console.log(1)
         return false
     }
 
     // Grab our cloudfront stuff
-    const { CloudFrontCookies } = await Book.GenerateCloudFront(BookId, SessionId)
-    console.log(CloudFrontCookies)
-
-    // Create the object
-    const book = new Book({
-        BookId,
-        //SessionId: UserConfig["ASP.NET_SessionId"],
-        CloudFront: CloudFrontCookies
-    })
+    const { CloudFrontCookies, SetCookiesTrimmed, CookieString } = await GenerateCloudFront(BookId, SessionId)
 
     // Make sure pages is a number
-    let PagesNumber = Pages ? parseInt(Pages) : await book.GetPageCount()
+    let PagesNumber = Pages ? parseInt(Pages) : await GetPageCount(BookId, CookieString)
     if (PagesNumber && isNaN(PagesNumber)) {
         alert("Invalid page number")
         return false
@@ -50,15 +64,15 @@ export async function DoRip(formElement: HTMLFormElement) {
     const Images: IImage[] = []
     const SVGs: string[] = []
     for (let i = 1; i < PagesNumber + 1; i++) {
-        const SVG = await book.GetSVG(i, true).catch(e => VerboseLog(true, "Error", `Page ${i} does not have an .svg component`))
-        const Background = await book.GetBackground(i, true)
+        const SVG = await GetSVG(BookId, i, CookieString).catch(e => VerboseLog(true, "Error", `Page ${i} does not have an .svg component`))
+        const Background = await GetBackground(BookId, i, CookieString)
 
         if (SVG)
             SVGs.push(SVG.toString())
 
         if (Background)
             Images.push({
-                data: toBuffer(Background.Background),
+                data: new Uint8Array(Background.Background.data),
                 type: Background.BackgroundFType
             })
     }
@@ -69,8 +83,8 @@ export async function DoRip(formElement: HTMLFormElement) {
         let PDF = await ManyImageToPDF(Images, SVGs)
 
         // Get the details
-        const Details: any = await book.GetDetails()
-
+        const Details = await GetDetails(BookId, CookieString)
+    
         // Add the outlines
         PDF = await AddOutlinesToPDF(PDF, Details.headers, PagesNumber)
 

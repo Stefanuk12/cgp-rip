@@ -16,7 +16,9 @@
   "license": "MIT",
   "dependencies": {
     "chalk": "^5.0.1",
-    "jspdf": "^2.5.1"
+    "express": "^4.18.1",
+    "jspdf": "^2.5.1",
+    "svg2pdf.js": "^2.2.1"
   },
   "devDependencies": {
     "@types/node": "^18.8.0",

@@ -2,7 +2,6 @@
 import chalk from "chalk"
 //import * as fs from "fs"
 import { jsPDF as PDFDocument } from "jspdf"
-import "svg2pdf.js"
 
 //
 // export function CreateFolder(Name: string) {
@@ -34,35 +33,20 @@ export function VerboseLog(Verbose: boolean, Type: LogType, ...args: any) {
     console.log(ColouredTime + " " + ChalkColour(...args))
 }
 
-//
-function ArrayToB64(bytes: Uint8Array) {
-    // Vars
-    let Base64Output = ""
-
-    // Loop
-    for (let i = 0; i < bytes.byteLength; i++){
-        Base64Output += String.fromCharCode(bytes[i])
-    }
-
-    // Return
-    return window.btoa(Base64Output);
-}
-
 // Gets an image size (via browser api)
-function SizeOf(Data: Uint8Array, mime: string) {
+function SizeOf(Data: Buffer, mime: string) {
     return new Promise<HTMLImageElement>((resolve, reject) => {
         let image = new Image()
         image.onload = function() {
             resolve(image)
         }
-        const b64 = ArrayToB64(Data)
-        image.src = `data:${mime};base64,${b64}`
+        image.src = `data:${mime};base64,${Data.toString("base64")}`
     })  
 }
 
 // Turns many pages into a pdf (ideally should all be the same size)
 export interface IImage {
-    data: Uint8Array
+    data: Buffer
     type: "PNG" | "JPEG"
 }
 export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
@@ -71,9 +55,10 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
 
     // Add each page
     for (let i in Images) {
-        // Vars
         const image = Images[i]
         const svg = SVGs[i]
+        // Load the image
+        //const LoadedImage = image.type == "jpg" ? await PDFDoc.embedJpg(image.data) : await PDFDoc.embedPng(image.data)
 
         // Create a new page
         const ImageSize = await SizeOf(image.data, image.type == "PNG" ? "image/png" : "image/jpeg")
@@ -81,9 +66,9 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
         const height = ImageSize.height || 1080
         const Page = PDFDoc.addPage([width, height])
 
-        // Draw the image in the centre of the page, alongwidth svg - if specified
+        // Draw the image in the centre of the page
         Page.addImage(image.data, image.type, 0, 0, width, height)
-        if (svg)
+        if (svg && false) // disable since does not work due no dom
             Page.addSvgAsImage(svg, 0, 0, width, height)
     }
 

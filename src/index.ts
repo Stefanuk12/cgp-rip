@@ -24,11 +24,12 @@ async function GetPageCount(BookId: string, CookieString: string) {
     return parseInt(TextPageCount)
 }
 async function GetSVG(BookId: string, Page: number, CookieString: string) {
-    return await (await fetch(`http://localhost:3000/svg/${BookId}/${Page}`, {
+    const Response = await (await fetch(`http://localhost:3000/svg/${BookId}/${Page}`, {
         headers: {
             "cloudfront-cookie": CookieString
         }
     })).text()
+    return Response == "no" ? null : Response
 }
 async function GetBackground(BookId: string, Page: number, CookieString: string) {
     return await (await fetch(`http://localhost:3000/background/${BookId}/${Page}`, {
@@ -64,13 +65,17 @@ export async function DoRip(formElement: HTMLFormElement) {
     const Images: IImage[] = []
     const SVGs: string[] = []
     for (let i = 1; i < PagesNumber + 1; i++) {
-        const SVG = await GetSVG(BookId, i, CookieString).catch(e => VerboseLog(true, "Error", `Page ${i} does not have an .svg component`))
+        const SVG = await GetSVG(BookId, i, CookieString)
         const Background = await GetBackground(BookId, i, CookieString)
 
-        if (SVG)
+        if (SVG) {
             SVGs.push(SVG.toString())
-
+            VerboseLog(true, "Info", `Got SVG for page ${i}`)
+        } else
+            VerboseLog(true, "Error", `Page ${i} does not have an .svg component`)
+    
         if (Background)
+            VerboseLog(true, "Info", `Got background for page ${i}`)
             Images.push({
                 data: new Uint8Array(Background.Background.data),
                 type: Background.BackgroundFType
@@ -81,12 +86,15 @@ export async function DoRip(formElement: HTMLFormElement) {
     if (Images.length > 0) {
         // Get the pdf
         let PDF = await ManyImageToPDF(Images, SVGs)
+        VerboseLog(true, "Info", "Converted to pdf")
 
         // Get the details
         const Details = await GetDetails(BookId, CookieString)
-    
+        VerboseLog(true, "Info", "Got details")
+
         // Add the outlines
         PDF = await AddOutlinesToPDF(PDF, Details.headers, PagesNumber)
+        VerboseLog(true, "Info", "Converted to pdf")
 
         // Save
         let blob = PDF.output("blob")

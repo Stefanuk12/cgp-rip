@@ -45,7 +45,7 @@ function ArrayToB64(bytes: Uint8Array) {
     }
 
     // Return
-    return window.btoa(Base64Output);
+    return window.btoa(Base64Output)
 }
 
 // Gets an image size (via browser api)
@@ -60,25 +60,100 @@ function SizeOf(Data: Uint8Array | string, mime: string) {
     })  
 }
 
-// SVG XML -> Element
-function XMLToElement(XML: string) {
-    const Placeholder = document.createElement("div")
-    Placeholder.innerHTML = XML
-    return <SVGElement>Placeholder.firstElementChild
-}
-
 //
-export async function DownloadItem(Name: string, Data: Blob | MediaSource) {
+export async function DownloadItem(Name: string, Data: Blob | MediaSource | string) {
     let link = document.createElement("a")
-    link.href = window.URL.createObjectURL(Data)
+
+    // Setting download link
+    if (typeof(Data) == "string") {
+        const CleanedLink = Data.replace(/^data:image\/\w+;base64,/, "")
+        link.href = `data:application/octet-stream;base64,${encodeURIComponent(CleanedLink)}`
+    } else
+        link.href = window.URL.createObjectURL(Data)
+
+    // Downloading
     link.download = Name
     link.click()
 }
 
-// Sets an image's dimensions
-function SetImageDimensions(Image: HTMLImageElement, w?: number, h?: number) {
-    Image.width = w || Image.width
-    Image.height = h || Image.height
+// Firefox doesn't correctly handle SVG with size = 0, see https://bugzilla.mozilla.org/show_bug.cgi?id=700533
+function SVGFireFoxFix(SVGDocument: any): Document {
+    try {
+        let Width = parseInt(SVGDocument.documentElement.width.baseVal.value) || 500
+        let Height = parseInt(SVGDocument.documentElement.height.baseVal.value) || 500
+        SVGDocument.documentElement.width.baseVal.newValueSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PX, Width)
+        SVGDocument.documentElement.height.baseVal.newValueSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PX, Height)
+        return SVGDocument
+    } catch (e) {
+        return SVGDocument
+    }
+}
+
+// Converts SVGDocument to Base64
+function SVGtoB64(SVG: Document) {
+    try {
+        const B64SVG = btoa(new XMLSerializer().serializeToString(SVG))
+        return "data:image/svg+xml;base64,2" + B64SVG
+    } catch (e) {
+        return null
+    }
+}
+
+// Converts Base64 to SVGDocument
+function B64toSVG(B64: string) {
+    let SVG = atob(B64.substring(B64.indexOf('base64,') + 7))
+    SVG = SVG.substring(SVG.indexOf('<svg'))
+
+    let Parser = new DOMParser()
+    return Parser.parseFromString(SVG, "image/svg+xml")
+}
+
+// Converts SVG to PNG
+function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png", SecondTry = false): Promise<string | null> {
+    return new Promise(resolve => {
+        // Create our placeholder
+        let img = document.createElement('img')
+
+        // Ran whenever the image is loaded
+        img.onload = async function () {
+            //
+            if (!SecondTry && (img.naturalWidth === 0 || img.naturalHeight === 0)) {
+                // Converting to SVG
+                let SVG = B64toSVG(SourceB64)
+                let FixedSVG = SVGFireFoxFix(SVG)
+
+                // Convert to PNG
+                const result = await SVGtoPNG(SVGtoB64(FixedSVG), Width, DataUrl, true)
+
+                // Done, yay!
+                resolve(result)
+            }
+
+            // Creating the canvas
+            document.body.appendChild(img)
+            let Canvas = document.createElement("canvas")
+            let Ratio = (img.clientWidth / img.clientHeight) || 1
+            document.body.removeChild(img)
+
+            // Setting resolution
+            Canvas.width = Width
+            Canvas.height = Width / Ratio
+
+            // Drawing the image
+            let CanvasCTX = Canvas.getContext("2d")
+            CanvasCTX.drawImage(img, 0, 0, Canvas.width, Canvas.height)
+
+            // Attempting to convert to png
+            try {
+                resolve(Canvas.toDataURL(DataUrl))
+            } catch (e) {
+                resolve(null)
+            }
+        }
+
+        // Set
+        img.src = SourceB64
+    })
 }
 
 // Turns many pages into a pdf (ideally should all be the same size)
@@ -99,7 +174,6 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
 
         // Create a new page
         const ImageSize = await SizeOf(image.data, image.type == "PNG" ? "image/png" : "image/jpeg")
-        const [x, y] = [0, 0]
         const width = ImageSize.width || 1920
         const height = ImageSize.height || 1080
         const Page = PDFDoc.addPage([width, height])
@@ -110,18 +184,12 @@ export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
             // Create the element
             const SVGImage = await SizeOf(window.btoa(unescape(encodeURIComponent(svg))), "image/svg+xml")
 
-            // Mods
-            SetImageDimensions(SVGImage, width, height)
-            const SVGString = new XMLSerializer().serializeToString(SVGImage)
-            //await DownloadItem("test.svg", new Blob([SVGString], {type: "image/svg+xml"})) // Downloads like normal
+            // Convert to png
+            const PNGImage = await SVGtoPNG(SVGImage.src, width)
+            const B64Image = PNGImage.substring(PNGImage.indexOf(",") + 1)
 
-            // Data
-            const Data = {x, y, width, height}
-            const SpreadData = <[number, number, number, number]>Object.values(Data)
-
-            // Add
-            Page.addSvgAsImage(SVGString, ...SpreadData)
-            //await Page.svg(SVGImage, Data)
+            // Add to the pdf
+            Page.addImage(B64Image, "png", 0, 0, width, height)
         }
             
     }

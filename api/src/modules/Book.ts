@@ -8,7 +8,7 @@ import { /*CreateFolder, */VerboseLog } from "./Utilities.js"
 //import * as fs from "fs"
 
 //
-const prefixUrl = "https://library.cgpbooks.co.uk/digitalcontent" 
+const prefixUrl = "https://library.cgpbooks.co.uk/digitalcontent"
 export const HttpClientAgent = got.extend({
     prefixUrl,
     headers: {
@@ -26,7 +26,7 @@ export interface IBook {
     BookId: string
     CloudFront: ICloudFront
 }
-export interface Book extends IBook {}
+export interface Book extends IBook { }
 export class Book {
     // Constructor
     constructor(Data: IBook) {
@@ -35,8 +35,8 @@ export class Book {
 
     // Generates the cloudfront stuff
     static async GenerateCloudFront(BookId: string, SessionId: string) {
-         // Send the request
-         const Response = await got.post(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
+        // Send the request
+        const Response = await got.post(`https://library.cgpbooks.co.uk/digitalaccess/${BookId}/Online`, {
             headers: {
                 cookie: `ASP.Net_SessionId=${SessionId}`
             },
@@ -50,17 +50,17 @@ export class Book {
         if (Response.statusCode != 200) {
             const Message = "Unable to get cloudfront"
             alert(Message)
-            throw(Message)
+            throw (Message)
         }
 
         // Parse the cookies
         const SetCookies = Response.headers["set-cookie"]
         if (!SetCookies)
-            throw(new Error("Did not get set-cookie"))
+            throw (new Error("Did not get set-cookie"))
         const SetCookiesTrimmed = SetCookies.map(v => {
             return v.substring(0, v.indexOf(";"))
         })
-        
+
         // Add each cookie to the cloudfront
         const CloudFrontCookies: ICloudFront = {
             "CloudFront-Signature": "",
@@ -77,14 +77,14 @@ export class Book {
         const CookieString = SetCookiesTrimmed.join(";")
 
         // Return
-        return {CloudFrontCookies, SetCookiesTrimmed, CookieString}
+        return { CloudFrontCookies, SetCookiesTrimmed, CookieString }
     }
     async GenerateCloudFront(SessionId: string) {
         return await Book.GenerateCloudFront(this.BookId, SessionId)
     }
     static async GenerateCloudFrontAPI(request: Request, response: Response) {
         // Grab data
-        const {BookId, SessionId} = request.params
+        const { BookId, SessionId } = request.params
 
         // Make sure we have the data
         if (!BookId || !SessionId) {
@@ -147,7 +147,7 @@ export class Book {
     }
     static async GetDetailsAPI(request: Request, response: Response) {
         // Vars
-        const {BookId} = request.params
+        const { BookId } = request.params
         const CloudFrontCookie = request.headers["cloudfront-cookie"]?.toString()
 
         // Verify data
@@ -172,7 +172,7 @@ export class Book {
     }
     static async GetPageCountAPI(request: Request, response: Response) {
         // Vars
-        const {BookId} = request.params
+        const { BookId } = request.params
         const CloudFrontCookie = request.headers["cloudfront-cookie"]?.toString()
 
         // Verify data
@@ -222,7 +222,7 @@ export class Book {
     }
     static async GetSVGAPI(request: Request, response: Response) {
         // Vars
-        const {BookId, Page} = request.params
+        const { BookId, Page } = request.params
         const CloudFrontCookie = request.headers["cloudfront-cookie"]?.toString()
 
         // Verify data
@@ -237,7 +237,11 @@ export class Book {
         }
 
         //
-        return response.send(await Book.GetSVG(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false))
+        try {
+            return response.send(await Book.GetSVG(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false))
+        } catch (e) {
+            return response.send("no")
+        }
     }
 
     // Grab the page background (either jpg or png)
@@ -251,9 +255,9 @@ export class Book {
         const For = `background for ${BookId}:${Page}`
         let BackgroundFType: "PNG" | "JPEG" = "JPEG"
         VerboseLog(Verbose, "Info", `Attempting to get ${For}`)
-        const Background = await HttpClientAgent(URL + "jpg", {cookieJar}).buffer().catch(async e => {
+        const Background = await HttpClientAgent(URL + "jpg", { cookieJar }).buffer().catch(async e => {
             BackgroundFType = "PNG"
-            return await HttpClientAgent(URL + "png", {cookieJar}).buffer()
+            return await HttpClientAgent(URL + "png", { cookieJar }).buffer()
         })
         VerboseLog(Verbose, "Success", `Got ${For}`)
 
@@ -269,14 +273,14 @@ export class Book {
         }
 
         // Return
-        return {Background, BackgroundFType}
+        return { Background, BackgroundFType }
     }
     async GetBackground(Page: number, Verbose: boolean = true, OutputDirectory?: string) {
         return await Book.GetBackground(this.BookId, Page, this.CloudFront, Verbose, OutputDirectory)
     }
     static async GetBackgroundAPI(request: Request, response: Response) {
         // Vars
-        const {BookId, Page} = request.params
+        const { BookId, Page } = request.params
         const CloudFrontCookie = request.headers["cloudfront-cookie"]?.toString()
 
         // Verify data
@@ -291,6 +295,10 @@ export class Book {
         }
 
         //
-        return response.send(await Book.GetBackground(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false))
+        try {
+            return response.send(await Book.GetBackground(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false))
+        } catch(e) {
+            return response.send("no")
+        }
     }
 }

@@ -141,8 +141,7 @@ export async function DoRip(formElement: HTMLFormElement, BackgroundsHandle: Fil
         VerboseLog(true, "Info", "Converted to pdf")
 
         // Save
-        let blob = PDFDoc.output("blob")
-        await DownloadItem(`${BookId}.pdf`, blob)
+        PDFDoc.save(`${BookId}.pdf`)
     }
 
     //

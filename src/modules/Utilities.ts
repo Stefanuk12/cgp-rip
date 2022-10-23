@@ -35,7 +35,7 @@ export function VerboseLog(Verbose: boolean, Type: LogType, ...args: any) {
 }
 
 //
-function ArrayToB64(bytes: Uint8Array) {
+export function ArrayToB64(bytes: Uint8Array) {
     // Vars
     let Base64Output = ""
 
@@ -49,7 +49,7 @@ function ArrayToB64(bytes: Uint8Array) {
 }
 
 // Gets an image size (via browser api)
-function SizeOf(Data: Uint8Array | string, mime: string) {
+export function SizeOf(Data: Uint8Array | string, mime: string) {
     return new Promise<HTMLImageElement>((resolve, reject) => {
         let image = new Image()
         image.onload = function() {
@@ -77,7 +77,7 @@ export async function DownloadItem(Name: string, Data: Blob | MediaSource | stri
 }
 
 // Firefox doesn't correctly handle SVG with size = 0, see https://bugzilla.mozilla.org/show_bug.cgi?id=700533
-function SVGFireFoxFix(SVGDocument: any): Document {
+export function SVGFireFoxFix(SVGDocument: any): Document {
     try {
         let Width = parseInt(SVGDocument.documentElement.width.baseVal.value) || 500
         let Height = parseInt(SVGDocument.documentElement.height.baseVal.value) || 500
@@ -90,17 +90,17 @@ function SVGFireFoxFix(SVGDocument: any): Document {
 }
 
 // Converts SVGDocument to Base64
-function SVGtoB64(SVG: Document) {
+export function SVGtoB64(SVG: Document) {
     try {
         const B64SVG = btoa(new XMLSerializer().serializeToString(SVG))
-        return "data:image/svg+xml;base64,2" + B64SVG
+        return "data:image/svg+xml;base64," + B64SVG
     } catch (e) {
         return null
     }
 }
 
 // Converts Base64 to SVGDocument
-function B64toSVG(B64: string) {
+export function B64toSVG(B64: string) {
     let SVG = atob(B64.substring(B64.indexOf('base64,') + 7))
     SVG = SVG.substring(SVG.indexOf('<svg'))
 
@@ -109,8 +109,8 @@ function B64toSVG(B64: string) {
 }
 
 // Converts SVG to PNG
-function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png", SecondTry = false): Promise<string | null> {
-    return new Promise(resolve => {
+export function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png", SecondTry = false): Promise<string | null> {
+    return new Promise((resolve, reject) => {
         // Create our placeholder
         let img = document.createElement('img')
 
@@ -121,9 +121,14 @@ function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png
                 // Converting to SVG
                 let SVG = B64toSVG(SourceB64)
                 let FixedSVG = SVGFireFoxFix(SVG)
+                const SVGB64 = SVGtoB64(FixedSVG)
+                if (!SVGB64) {
+                    const Message = "Unable to convert SVG to B64"
+                    return reject(new Error(Message))
+                }
 
                 // Convert to PNG
-                const result = await SVGtoPNG(SVGtoB64(FixedSVG), Width, DataUrl, true)
+                const result = await SVGtoPNG(SVGB64, Width, DataUrl, true)
 
                 // Done, yay!
                 resolve(result)
@@ -141,6 +146,10 @@ function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png
 
             // Drawing the image
             let CanvasCTX = Canvas.getContext("2d")
+            if (!CanvasCTX) {
+                const Message = "Unable to get canvas context"
+                return reject(new Error(Message))
+            }
             CanvasCTX.drawImage(img, 0, 0, Canvas.width, Canvas.height)
 
             // Attempting to convert to png
@@ -154,48 +163,6 @@ function SVGtoPNG(SourceB64: string, Width: number, DataUrl: string = "image/png
         // Set
         img.src = SourceB64
     })
-}
-
-// Turns many pages into a pdf (ideally should all be the same size)
-export interface IImage {
-    data: Uint8Array
-    type: "PNG" | "JPEG"
-}
-export async function ManyImageToPDF(Images: IImage[], SVGs: string[] = []) {
-    // Create the PDF
-    const PDFDoc = new PDFDocument()
-    PDFDoc.deletePage(1)
-
-    // Add each page
-    for (let i in Images) {
-        // Vars
-        const image = Images[i]
-        const svg = SVGs[i]
-
-        // Create a new page
-        const ImageSize = await SizeOf(image.data, image.type == "PNG" ? "image/png" : "image/jpeg")
-        const width = ImageSize.width || 1920
-        const height = ImageSize.height || 1080
-        const Page = PDFDoc.addPage([width, height])
-
-        // Draw the image in the centre of the page, alongwidth svg - if specified
-        Page.addImage(image.data, image.type, 0, 0, width, height)
-        if (svg) {
-            // Create the element
-            const SVGImage = await SizeOf(window.btoa(unescape(encodeURIComponent(svg))), "image/svg+xml")
-
-            // Convert to png
-            const PNGImage = await SVGtoPNG(SVGImage.src, width)
-            const B64Image = PNGImage.substring(PNGImage.indexOf(",") + 1)
-
-            // Add to the pdf
-            Page.addImage(B64Image, "png", 0, 0, width, height)
-        }
-            
-    }
-
-    // Return the PDF
-    return PDFDoc
 }
 
 // Adds all of the outlines

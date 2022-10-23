@@ -1,6 +1,16 @@
+/*
+Information:
+    - There is an error `Error in function Array.join (: Invalid string length RangeError: Invalid string length`
+        - This is caused because the PDF is TOO large
+*/
+
 // Dependencies
 import chalk from "chalk";
-import { VerboseLog, IImage, ManyImageToPDF, AddOutlinesToPDF, DownloadItem } from "./modules/Utilities"
+import { VerboseLog, AddOutlinesToPDF, DownloadItem, SizeOf, SVGtoPNG } from "./modules/Utilities"
+
+//import * as fs from "fs"
+import { jsPDF as PDFDocument } from "jspdf"
+import "svg2pdf.js"
 
 //
 async function GenerateCloudFront(BookId: string, SessionId: string) {
@@ -32,7 +42,13 @@ async function GetSVG(BookId: string, Page: number, CookieString: string) {
     return Response == "no" ? null : Response
 }
 async function GetBackground(BookId: string, Page: number, CookieString: string) {
-    return await (await fetch(`http://localhost:3000/background/${BookId}/${Page}`, {
+    return <{
+        Background: {
+            type: "Buffer",
+            data: number[]
+        },
+        BackgroundFType: "JPEG" | "PNG"
+    }>await (await fetch(`http://localhost:3000/background/${BookId}/${Page}`, {
         headers: {
             "cloudfront-cookie": CookieString
         }
@@ -40,7 +56,7 @@ async function GetBackground(BookId: string, Page: number, CookieString: string)
 }
 
 // Starts the rip
-export async function DoRip(formElement: HTMLFormElement) {
+export async function DoRip(formElement: HTMLFormElement, BackgroundsHandle: FileSystemDirectoryHandle, SVGsHandle: FileSystemDirectoryHandle) {
     // Vars
     const formData = new FormData(formElement)
     const BookId = formData.get("bookId")?.toString()
@@ -61,31 +77,59 @@ export async function DoRip(formElement: HTMLFormElement) {
         return false
     }
 
+    // Create the PDF
+    let PDFDoc = new PDFDocument()
+    PDFDoc.deletePage(1)
+
     // Do it
-    const Images: IImage[] = []
-    const SVGs: string[] = []
+    let Success = false
     for (let i = 1; i < PagesNumber + 1; i++) {
+        // Grab the data
         const SVG = await GetSVG(BookId, i, CookieString)
         const Background = await GetBackground(BookId, i, CookieString)
 
+        // We must have a background
+        if (!Background) {
+            VerboseLog(true, "Error", `Page ${i} does not have a background. This page is aborted.`)
+            continue
+        }
+
+        //
+        const ImageData = new Uint8Array(Background.Background.data)
+        const ImageMIME = Background.BackgroundFType == "PNG" ? "image/png" : "image/jpeg"
+        const ImageSize = await SizeOf(ImageData, ImageMIME)
+        const width = ImageSize.width || 1920
+        const height = ImageSize.height || 1080
+        const Page = PDFDoc.addPage([width, height])
+
+        // Draw the image in the centre of the page, alongwidth svg - if specified
+        Page.addImage(ImageData, Background.BackgroundFType, 0, 0, width, height)
+        VerboseLog(true, "Info", `Got background for page ${i}`)
+        Success = true
+
+        // Adding the SVG
         if (SVG) {
-            SVGs.push(SVG.toString())
+            // Create the element
+            const SVGImage = await SizeOf(window.btoa(unescape(encodeURIComponent(SVG))), "image/svg+xml")
+
+            // Convert to png
+            const PNGImage = await SVGtoPNG(SVGImage.src, width)
+            if (!PNGImage)
+                continue
+            const B64Image = PNGImage.substring(PNGImage.indexOf(",") + 1)
+
+            // Add to the pdf
+            Page.addImage(B64Image, "png", 0, 0, width, height)
+
+            // Done
             VerboseLog(true, "Info", `Got SVG for page ${i}`)
         } else
             VerboseLog(true, "Error", `Page ${i} does not have an .svg component`)
-    
-        if (Background)
-            VerboseLog(true, "Info", `Got background for page ${i}`)
-            Images.push({
-                data: new Uint8Array(Background.Background.data),
-                type: Background.BackgroundFType
-            })
     }
 
     // PDF stuff
-    if (Images.length > 0) {
-        // Get the pdf
-        let PDF = await ManyImageToPDF(Images, SVGs)
+    if (Success) {
+        //
         VerboseLog(true, "Info", "Converted to pdf")
 
         // Get the details
@@ -93,12 +137,11 @@ export async function DoRip(formElement: HTMLFormElement) {
         VerboseLog(true, "Info", "Got details")
 
         // Add the outlines
-        PDF = await AddOutlinesToPDF(PDF, Details.headers, PagesNumber)
+        PDFDoc = await AddOutlinesToPDF(PDFDoc, Details.headers, PagesNumber)
         VerboseLog(true, "Info", "Converted to pdf")
 
         // Save
-        let blob = PDF.output("blob")
-        await DownloadItem(`${BookId}.pdf`, blob)
+        PDFDoc.output("datauristring")
     }
 
     //
@@ -109,8 +152,19 @@ export async function DoRip(formElement: HTMLFormElement) {
 }
 
 // Event listener
-document.forms[0].onsubmit = function(e) {
+document.forms[0].onsubmit = async function(e) {
     e.preventDefault()
-    DoRip(document.forms[0])
+    
+    // Ask user for cache directory
+    const CacheHandle = await (<any>window).showDirectoryPicker()
+    const BackgroundsHandle = await CacheHandle.getDirectoryHandle("bgs", {
+        create: true
+    })
+    const SVGsHandle = await CacheHandle.getDirectoryHandle("svgs", {
+        create: true
+    })
+
+    // Run
+    DoRip(document.forms[0], BackgroundsHandle, SVGsHandle)
     return false
 }

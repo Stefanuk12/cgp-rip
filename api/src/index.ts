@@ -21,7 +21,7 @@ app.get("/page/:BookId", Book.GetPageCountAPI)
 app.get("/svg/:BookId/:Page", Book.GetSVGAPI)
 
 // Getting background
-app.get("/background/:BookId/:Page", Book.GetBackgroundAPI)
+app.get("/background/:BookId/:Page/:Size", Book.GetBackgroundAPI)
 
 //
 app.listen(3000, () => {

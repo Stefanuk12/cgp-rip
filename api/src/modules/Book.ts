@@ -245,10 +245,10 @@ export class Book {
     }
 
     // Grab the page background (either jpg or png)
-    static async GetBackground(BookId: string, Page: number, CloudFront: ICloudFront, Verbose: boolean = true, OutputDirectory?: string) {
+    static async GetBackground(BookId: string, Page: number, CloudFront: ICloudFront, Verbose: boolean = true, OutputDirectory?: string, Size = "4") {
         // Vars
         const ZeroPadded = Page.toString().padStart(4, "0")
-        const URL = `${BookId}/assets/common/page-html5-substrates/page${ZeroPadded}_4.` // the _4 indicates a higher resolution. i believe this is the maximum or 5
+        const URL = `${BookId}/assets/common/page-html5-substrates/page${ZeroPadded}_${Size}.` // the _4 indicates a higher resolution. i believe this is the maximum or 5
         const cookieJar = Book.getJar(CloudFront)
 
         // Grab it
@@ -280,11 +280,11 @@ export class Book {
     }
     static async GetBackgroundAPI(request: Request, response: Response) {
         // Vars
-        const { BookId, Page } = request.params
+        const { BookId, Page, Size } = request.params
         const CloudFrontCookie = request.headers["cloudfront-cookie"]?.toString()
 
         // Verify data
-        if (!BookId || !CloudFrontCookie) {
+        if (!BookId || !CloudFrontCookie || !Size) {
             return response.status(400).send("Missing data")
         }
 
@@ -296,7 +296,7 @@ export class Book {
 
         //
         try {
-            return response.send(await Book.GetBackground(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false))
+            return response.send(await Book.GetBackground(BookId, PageNumber, Book.getCookieObject(CloudFrontCookie), false, undefined, Size))
         } catch(e) {
             return response.send("no")
         }

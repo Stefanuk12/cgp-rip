@@ -1,5 +1,6 @@
 // Dependencies
 import chalk from "chalk"
+import { writeFile } from "fs"
 //import * as fs from "fs"
 import { jsPDF as PDFDocument } from "jspdf"
 import "svg2pdf.js"
@@ -49,13 +50,13 @@ export function ArrayToB64(bytes: Uint8Array) {
 }
 
 // Gets an image size (via browser api)
-export function SizeOf(Data: Uint8Array | string, mime: string) {
+export function SizeOf(Data: Uint8Array | string, mime: string, b64StringData = true) {
     return new Promise<HTMLImageElement>((resolve, reject) => {
         let image = new Image()
         image.onload = function() {
             resolve(image)
         }
-        const b64 = Data instanceof Uint8Array ? ArrayToB64(Data) : Data
+        const b64 = Data instanceof Uint8Array ? ArrayToB64(Data) : (b64StringData ? window.btoa(unescape(encodeURIComponent(Data))) : Data)
         image.src = `data:${mime};base64,${b64}`
     })  
 }
@@ -190,4 +191,11 @@ export async function AddOutlinesToPDF(PDFDoc: PDFDocument, Headers: IOutlinePDF
 
     // Return
     return PDFDoc
+}
+
+// Writes to a file
+export async function WriteFile(FileHandle: FileSystemFileHandle, Contents: string) {
+    const Writable = await (<any>FileHandle).createWritable()
+    await Writable.write(Contents)
+    await Writable.close()
 }

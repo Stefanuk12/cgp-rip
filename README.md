@@ -9,6 +9,10 @@ It downloads the background (jpg/png) and text (svg) of each page using your ses
 
 ## How to run
 
+### Automated Version
+- Run `npm i` to install all of the dependencies first
+- Run `node run.js` which will do the rest for you
+
 ### Running the API
 You must have the API running with nodejs in the background, this allows us to get around cors.
 

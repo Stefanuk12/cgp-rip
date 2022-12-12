@@ -1,9 +1,6 @@
 // Dependencies
 import { execSync as ExecuteShell, exec as ExecuteShellA } from "child_process"
-import { open as OpenWindow } from "open"
-
-// Install all dependencies
-ExecuteShell("npm i")
+import open from "open"
 
 // Compile the RIP
 ExecuteShell("npx webpack-cli")
@@ -14,9 +11,11 @@ ExecuteShell("npm i")
 ExecuteShell("npx tsc")
 
 // Execute the API, async
-ExecuteShellA("node lib/index.js")
+ExecuteShellA("node lib/index.js").then(_ => {
+    console.log("Started API...")
+})
 
 // Open the main thing in browser
-OpenWindow("../public/index.html").then(_ => {
+open.openApp("./public/index.html").then(_ => {
     console.log("Done, opened browser.")
 })

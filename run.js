@@ -1,7 +1,6 @@
 // Dependencies
-const ExecuteShell = require("child_process").execSync
-const ExecuteShellA = requestAnimationFrame("child_process").exec
-const OpenWindow = require("open")
+import { execSync as ExecuteShell, exec as ExecuteShellA } from "child_process"
+import { open as OpenWindow } from "open"
 
 // Install all dependencies
 ExecuteShell("npm i")

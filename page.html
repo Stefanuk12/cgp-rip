@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                position: relative;
+            }
+            .container > img {
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+            .container > img:first-child {
+                z-index: 2;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+            <img src="VECTORPATH" width="WIDTHpx" height="HEIGHTpx">
+            <img src="IMAGEPATH">
+        </div>
+    </body>
+</html>

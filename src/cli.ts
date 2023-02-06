@@ -4,8 +4,11 @@
 import { program } from "commander"
 import * as fs from "fs"
 import { Book } from "./modules/Book.js"
-import { AddOutlinesToPDF, CreateFolder, IImage, ManyImageToPDF, VerboseLog } from "./modules/Utilities.js";
+import { FormatPageTemplate, VerboseLog } from "./modules/Utilities.js";
 import chalk from "chalk"
+import imageSize from "image-size";
+import puppeteer from "puppeteer";
+import PDFMerger from "pdf-merger-js";
 
 // Vars
 const PackageData = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf-8"))
@@ -77,9 +80,6 @@ interface IRipOptions {
     
     // Options
     Command.option("-p, --pages <number>", "The amount of pages to grab", "")
-    Command.option("--svg", "Rip the SVG text", true)
-    Command.option("--background", "Rip the background", true)
-    Command.option("--merge", "Merge the SVG and background (ignores --svg and --background)", false)
     Command.option("--pdf", "Creates a PDF", true)
     Command.option("-o, --output <directory>", "The output directory", "./")
     Command.option("-f, --file <directory>", "Config file path", "config.json")
@@ -90,8 +90,11 @@ interface IRipOptions {
         // Make sure is configured
         if (!fs.existsSync(Options.file))
             throw(new Error("Not configured. Please run configure first."))
+        
+        // Vars
         const UserConfig = <IConfigureData>JSON.parse(fs.readFileSync(Options.file, "utf-8"))
-        const {CloudFrontCookies} = await Book.GenerateCloudFront(BookId, UserConfig["ASP.NET_SessionId"])
+        const { CloudFrontCookies } = await Book.GenerateCloudFront(BookId, UserConfig["ASP.NET_SessionId"])
+        const Verbose = Options.verbose
 
         // Create the object
         const book = new Book({
@@ -105,41 +108,51 @@ interface IRipOptions {
         if (isNaN(Pages))
             throw(new Error("pages - number not given"))
 
+        // Start puppeteer
+        VerboseLog(Verbose, "Info", "Starting puppeteer")
+        const browser = await puppeteer.launch()
+        VerboseLog(Verbose, "Info", "Started puppeteer")
+
+        // Vars
+        // const Details: any = await book.GetDetails()
+        const [ page ] = await browser.pages()
+        const merger = new PDFMerger()
+
         // Doit
-        const Images: IImage[] = []
-        const SVGs: string[] = []
         for (let i = 1; i < Pages + 1; i++) {
-            const SVG = (Options.svg || Options.merge) ? await book.GetSVG(i, Options.verbose, Options.output).catch(e => VerboseLog(true, "Error", `Page ${i} does not have an .svg component`)) : undefined
-            const Background = (Options.background || Options.merge) ? await book.GetBackground(i, Options.verbose, Options.output) : undefined
+            // Grab the svg and background
+            const SVGBuffer = await book.GetSVG(i, Verbose, Options.output)
+            const ImageBuffer = await book.GetBackground(i, Verbose, Options.output)
 
-            if (SVG)
-                SVGs.push(SVG.toString())
+            // Convert to base64
+            const SVGUrl = `data:image/svg+xml;base64, ${SVGBuffer.toString("base64")}`
+            const ImageUrl = `data:image/${ImageBuffer.BackgroundFType == "JPEG" ? "jpeg" : "png"};base64, ${ImageBuffer.Background.toString("base64")}`
+            
+            // Creating the page
+            // const Header = <string>Object.values(Details.headers)[i]
+            const ImageDimensions = imageSize(ImageBuffer.Background)
+            const Page = FormatPageTemplate(ImageDimensions.height?.toString() || "", ImageDimensions.width?.toString() || "", ImageUrl, SVGUrl)
 
-            if (Background)
-                Images.push({
-                    data: Background.Background,
-                    type: Background.BackgroundFType
-                })
-        }
-    
-        // PDF stuff
-        if (Images.length > 0 && Options.pdf) {
-            // Get the pdf
-            let PDF = await ManyImageToPDF(Images, SVGs)
+            // Log
+            VerboseLog(Verbose, "Info", `Converted to html for ${BookId}:${i}`)
 
-            // Get the details
-            const Details: any = await book.GetDetails()
+            // Add to the merger
+            await page.setContent(Page)
+            merger.add(await page.pdf({
+                height: ImageDimensions.height || 0,
+                width: ImageDimensions.width || 0,
+            }))
 
-            // Add the outlines
-            PDF = await AddOutlinesToPDF(PDF, Details.headers, Pages)
-
-            // Save
-            const OutputDirectory = `${Options.output}/pdfs`
-            CreateFolder(OutputDirectory)
-            PDF.save(`${OutputDirectory}/${BookId}.pdf`)
+            // Done
+            VerboseLog(Verbose, "Success", `Converted to a pdf and added to merger for ${BookId}:${i}`)
         }
 
-        //
+        // Save
+        await browser.close()
+        await merger.save(`${Options.output}/${BookId}.pdf`)
+
+        // Load pdf
+        // Completed
         console.log(chalk.bgGreen("Done"))
     })
 }

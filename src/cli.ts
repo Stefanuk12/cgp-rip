@@ -64,10 +64,7 @@ interface IConfigureData {
 // Rips a book
 interface IRipOptions {
     pages: string
-    svg: boolean
-    background: boolean
-    merge: boolean
-    pdf: boolean
+    quality: string
     output: string
     file: string
     verbose: boolean
@@ -80,7 +77,7 @@ interface IRipOptions {
     
     // Options
     Command.option("-p, --pages <number>", "The amount of pages to grab", "")
-    Command.option("--pdf", "Creates a PDF", true)
+    Command.option("-q, --quality <number>", "The quality of the background", "4")
     Command.option("-o, --output <directory>", "The output directory", "./")
     Command.option("-f, --file <directory>", "Config file path", "config.json")
     Command.option("-v, --verbose", "Output what it is doing", true)
@@ -108,6 +105,15 @@ interface IRipOptions {
         if (isNaN(Pages))
             throw(new Error("pages - number not given"))
 
+        // Make sure quality is a number
+        const Quality = parseInt(Options.quality)
+        if (isNaN(Quality))
+            throw(new Error("quality - not a number given"))
+
+        // Check the quality range
+        if (Quality < 1 || Quality > 4)
+            throw(new Error("quality - not within range 1-4 (inclusive)"))
+
         // Start puppeteer
         VerboseLog(Verbose, "Info", "Starting puppeteer")
         const browser = await puppeteer.launch()
@@ -118,16 +124,16 @@ interface IRipOptions {
         const [ page ] = await browser.pages()
         const merger = new PDFMerger()
 
-        // Doit
-        for (let i = 1; i < Pages + 1; i++) {
+        // Build a singular page
+        async function BuildPage(i: number) {
             // Grab the svg and background
             const SVGBuffer = await book.GetSVG(i, Verbose, Options.output)
-            const ImageBuffer = await book.GetBackground(i, Verbose, Options.output)
+            const ImageBuffer = await book.GetBackground(i, Verbose, Options.output, <any>Quality)
 
             // Convert to base64
             const SVGUrl = `data:image/svg+xml;base64, ${SVGBuffer.toString("base64")}`
             const ImageUrl = `data:image/${ImageBuffer.BackgroundFType == "JPEG" ? "jpeg" : "png"};base64, ${ImageBuffer.Background.toString("base64")}`
-            
+
             // Creating the page
             // const Header = <string>Object.values(Details.headers)[i]
             const ImageDimensions = imageSize(ImageBuffer.Background)
@@ -136,11 +142,37 @@ interface IRipOptions {
             // Log
             VerboseLog(Verbose, "Info", `Converted to html for ${BookId}:${i}`)
 
+            // Return
+            return {i, Page, ImageDimensions}
+        }
+
+        // Create promises for every page
+        const Promises = []
+        for (let i = 1; i < Pages + 1; i++) {
+            Promises.push(BuildPage(i))
+        }
+
+        // Wait for them to finish then sort them
+        const ResolvedPromises = await Promise.all(Promises)
+        ResolvedPromises.sort((a, b) => a.i - b.i)
+        
+        // Complete
+        const AddOne = (Quality == 2 || Quality == 3) ? Quality - 1 : 0
+        for (const PageData of ResolvedPromises) {
+            // Vars
+            const {i, Page, ImageDimensions} = PageData
+
+            // Ensure we got page dimensions
+            if (!ImageDimensions.height || !ImageDimensions.width) {
+                VerboseLog(Verbose, "Error", `No background for ${BookId}:${i}`)
+                continue
+            }
+
             // Add to the merger
             await page.setContent(Page)
             merger.add(await page.pdf({
-                height: ImageDimensions.height || 0,
-                width: ImageDimensions.width || 0,
+                height: ImageDimensions.height + AddOne,
+                width: ImageDimensions.width + AddOne,
             }))
 
             // Done

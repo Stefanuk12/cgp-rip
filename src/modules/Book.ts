@@ -134,10 +134,10 @@ export class Book {
     }
 
     // Grab the page background (either jpg ot png)
-    async GetBackground(Page: number, Verbose: boolean = true, OutputDirectory?: string) {
+    async GetBackground(Page: number, Verbose: boolean = true, OutputDirectory?: string, quality: 1 | 2 | 3 | 4 = 4) {
         // Vars
         const ZeroPadded = Page.toString().padStart(4, "0")
-        const URL = `${this.BookId}/assets/common/page-html5-substrates/page${ZeroPadded}_4.` // the _4 indicates a higher resolution. i believe this is the maximum or 5
+        const URL = `${this.BookId}/assets/common/page-html5-substrates/page${ZeroPadded}_${quality.toString()}.` // the _4 indicates a higher resolution. i believe this is the maximum or 5
         const cookieJar = this.getJar()
 
         // Grab it

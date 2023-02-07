@@ -77,7 +77,7 @@ interface IRipOptions {
 
     // Arguments
     Command.argument("<book-id>", "The book's id")
-    
+
     // Options
     Command.option("-p, --pages <number>", "The amount of pages to grab", "")
     Command.option("--pdf", "Creates a PDF", true)
@@ -89,8 +89,8 @@ interface IRipOptions {
     Command.action(async (BookId: string, Options: IRipOptions) => {
         // Make sure is configured
         if (!fs.existsSync(Options.file))
-            throw(new Error("Not configured. Please run configure first."))
-        
+            throw (new Error("Not configured. Please run configure first."))
+
         // Vars
         const UserConfig = <IConfigureData>JSON.parse(fs.readFileSync(Options.file, "utf-8"))
         const { CloudFrontCookies } = await Book.GenerateCloudFront(BookId, UserConfig["ASP.NET_SessionId"])
@@ -106,7 +106,7 @@ interface IRipOptions {
         // Make sure pages is a number
         const Pages = parseInt(Options.pages || (await book.GetPageCount()).toString())
         if (isNaN(Pages))
-            throw(new Error("pages - number not given"))
+            throw (new Error("pages - number not given"))
 
         // Start puppeteer
         VerboseLog(Verbose, "Info", "Starting puppeteer")
@@ -115,36 +115,51 @@ interface IRipOptions {
 
         // Vars
         // const Details: any = await book.GetDetails()
-        const [ page ] = await browser.pages()
+        const [page] = await browser.pages()
         const merger = new PDFMerger()
 
-        // Doit
-        for (let i = 1; i < Pages + 1; i++) {
-            // Grab the svg and background
-            const SVGBuffer = await book.GetSVG(i, Verbose, Options.output)
-            const ImageBuffer = await book.GetBackground(i, Verbose, Options.output)
+        async function BuildPage(Page: number) {
+            const SVGBuffer = await book.GetSVG(Page, Verbose, Options.output)
+            const ImageBuffer = await book.GetBackground(Page, Verbose, Options.output)
 
             // Convert to base64
             const SVGUrl = `data:image/svg+xml;base64, ${SVGBuffer.toString("base64")}`
             const ImageUrl = `data:image/${ImageBuffer.BackgroundFType == "JPEG" ? "jpeg" : "png"};base64, ${ImageBuffer.Background.toString("base64")}`
-            
+
             // Creating the page
             // const Header = <string>Object.values(Details.headers)[i]
             const ImageDimensions = imageSize(ImageBuffer.Background)
-            const Page = FormatPageTemplate(ImageDimensions.height?.toString() || "", ImageDimensions.width?.toString() || "", ImageUrl, SVGUrl)
+            const Template = FormatPageTemplate(ImageDimensions.height?.toString() || "", ImageDimensions.width?.toString() || "", ImageUrl, SVGUrl)
 
             // Log
-            VerboseLog(Verbose, "Info", `Converted to html for ${BookId}:${i}`)
+            VerboseLog(Verbose, "Info", `Converted to html for ${BookId}:${Page}`)
 
-            // Add to the merger
-            await page.setContent(Page)
-            merger.add(await page.pdf({
-                height: ImageDimensions.height || 0,
+
+            return {
+                template: Template,
+                number: Page,
                 width: ImageDimensions.width || 0,
+                height: ImageDimensions.height || 0,
+            }
+        }
+
+        const BuildList = []
+        for (let i = 1; i < Pages + 1; i++) {
+            BuildList.push(BuildPage(i))
+        }
+
+        // Doit
+        for (const Built of await Promise.all(BuildList)) {
+            // Grab the svg and background
+            // Add to the merger
+            await page.setContent(Built.template)
+            merger.add(await page.pdf({
+                height: Built.height || 0,
+                width: Built.width || 0,
             }))
 
             // Done
-            VerboseLog(Verbose, "Success", `Converted to a pdf and added to merger for ${BookId}:${i}`)
+            VerboseLog(Verbose, "Success", `Converted to a pdf and added to merger for ${BookId}:${Built.number}`)
         }
 
         // Save

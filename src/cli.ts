@@ -127,11 +127,14 @@ interface IRipOptions {
         // Build a singular page
         async function BuildPage(i: number) {
             // Grab the svg and background
-            const SVGBuffer = await book.GetSVG(i, Verbose, Options.output)
+            let SVGBuffer = undefined
+            try {
+                SVGBuffer = await book.GetSVG(i, Verbose, Options.output)
+            } catch (e) { }
             const ImageBuffer = await book.GetBackground(i, Verbose, Options.output, <any>Quality)
 
             // Convert to base64
-            const SVGUrl = `data:image/svg+xml;base64, ${SVGBuffer.toString("base64")}`
+            const SVGUrl = SVGBuffer && `data:image/svg+xml;base64, ${SVGBuffer.toString("base64")}`
             const ImageUrl = `data:image/${ImageBuffer.BackgroundFType == "JPEG" ? "jpeg" : "png"};base64, ${ImageBuffer.Background.toString("base64")}`
 
             // Creating the page

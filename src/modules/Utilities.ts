@@ -10,8 +10,14 @@ export function CreateFolder(Name: string) {
 
 // Creates the html file by formatting the template
 const pageTemplate = fs.readFileSync("page.html", "utf-8")
-export function FormatPageTemplate(Height: string, Width: string, ImagePath: string, VectorPath: string) {
-    return pageTemplate.toString().replace("HEIGHT", Height).replace("WIDTH", Width).replace("IMAGEPATH", ImagePath).replace("VECTORPATH", VectorPath)
+export function FormatPageTemplate(Height: string, Width: string, ImagePath: string, VectorPath: string | undefined) {
+    const result = pageTemplate.toString().replace("HEIGHT", Height).replace("WIDTH", Width).replace("IMAGEPATH", ImagePath)
+    
+    if (VectorPath) {
+        return result.replace("VECTORPATH", VectorPath)
+    } else {
+        return result.replace("VECTORPATH", "")
+    }
 }
 
 //

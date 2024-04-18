@@ -87,7 +87,7 @@ export class Book {
 
     // Gets some book details
     static async GetDetails(BookId: string, CloudFront: ICloudFront) {
-        return await HttpClientAgent(`${BookId}/assets/pager.js`, {
+        return await HttpClientAgent(`${BookId}/assets/common/pager.js`, {
             cookieJar: Book.getJar(CloudFront)
         }).json()
     }

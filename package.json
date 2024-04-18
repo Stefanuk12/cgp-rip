@@ -1,6 +1,6 @@
 {
   "name": "cgp-rip",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Convert an online CGP book to .pdf",
   "main": "./lib/cli.js",
   "types": "./lib/cli.d.ts",

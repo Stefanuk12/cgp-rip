@@ -1,6 +1,10 @@
 # CGP Rip
 Convert an online CGP book to .pdf (not finished yet). This also works both as a CLI and package.
 
+## Archived
+
+As I'm going into university, I no longer have need for this tool and therefore will no longer be maintaining it.
+
 ## How it works
 It downloads the background (jpg/png) and text (svg) of each page using your session id (you must own the book). Then, it combines them to form the actual page.
 
